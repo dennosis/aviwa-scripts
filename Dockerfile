@@ -1,0 +1,22 @@
+FROM python:3.11
+
+ARG USER_ID=1000
+ARG USER_NAME="application"
+ARG GROUP_ID=1000
+ARG GROUP_NAME="service"
+ARG WORKDIR_PATH="/home/application/app"
+
+ENV WORKDIR_PATH="${WORKDIR_PATH}"
+ENV PATH="${WORKDIR_PATH}/.venv/bin:${PATH}"
+ENV PYTHONPATH="${WORKDIR_PATH}/src:${PYTHONPATH}"
+
+
+ENV DATA_PATH="${WORKDIR_PATH}/data"
+ENV MODELS_PATH="${WORKDIR_PATH}/ml_models"
+
+
+RUN addgroup --gid ${GROUP_ID} ${GROUP_NAME} && \
+    useradd ${USER_NAME} --uid ${USER_ID} --system --gid ${GROUP_ID}
+
+USER ${USER_NAME}
+WORKDIR ${WORKDIR_PATH}

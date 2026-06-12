@@ -1,0 +1,24 @@
+{
+    "editor.formatOnSave": true,
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.autoIndent": "advanced",
+        "files.autoSave": "afterDelay",
+    },
+    "python.autoComplete.extraPaths": [
+        "src",
+    ],
+    "python.analysis.extraPaths": [
+        "src",
+    ],
+    "python.analysis.stubPath": ".vscode",
+    "files.exclude": {
+        "**/*.egg-info": true,
+        "**/__pycache__": true,
+        ".pytest_cache": true,
+    },
+    "notebook.output.textLineLimit": 10000,
+    "notebook.formatOnSave.enabled": true,
+    "notebook.defaultFormatter": "charliermarsh.ruff",
+    "debug.inlineValues": "on",
+}

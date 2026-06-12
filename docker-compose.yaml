@@ -1,0 +1,26 @@
+services:
+  python:
+    hostname: aviwa-analysis-python
+    restart: unless-stopped
+    build:
+      context: .
+    image: aviwa-analysis-python/python:latest
+    networks:
+      - main
+    volumes:
+      - ./:/home/application/app
+    stdin_open: true
+    tty: true
+    environment:
+      - GBS_USER=${GBS_USER}
+      - GBS_PASSWORD=${GBS_PASSWORD}
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: all
+#              capabilities: [gpu]
+networks:
+  main:
+    driver: bridge

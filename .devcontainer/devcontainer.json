@@ -1,0 +1,28 @@
+{
+	"dockerComposeFile": [
+		"../docker-compose.yaml"
+	],
+	"service": "python",
+	"userEnvProbe": "loginInteractiveShell",
+	"remoteUser": "root",
+	"privileged": true,
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"charliermarsh.ruff",
+				"maattdd.gitless",
+				"mechatroner.rainbow-csv",
+				"mhutchie.git-graph",
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-toolsai.jupyter",
+				"ms-toolsai.vscode-jupyter-powertoys",
+				"ms-vsliveshare.vsliveshare",
+				"qufiwefefwoyn.inline-sql-syntax",
+				"redhat.vscode-yaml"
+			]
+		}
+	},
+	"workspaceFolder": "/home/application/app/",
+	"shutdownAction": "stopCompose"
+}
