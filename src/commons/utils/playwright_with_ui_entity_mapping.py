@@ -1,6 +1,17 @@
+import asyncio
 import re
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Union, Any
+from typing import (
+    List,
+    Optional,
+    Tuple,
+    Dict,
+    Union,
+    Any,
+    Callable,
+    Awaitable,
+    TypeAlias,
+)
 from playwright.async_api import Page, Locator
 from commons.schemas.ui_entity_mapping import (
     ScrapingListingItem,
@@ -13,9 +24,16 @@ from commons.schemas.ui_entity_mapping import (
     UITable,
     UITableColumn,
     UIEntity,
+    UIInputIdElement,
 )
 from commons.utils.playwright import check_exist_element
 from commons.utils.json import read_json
+from commons.utils.dict import is_match_dict, MatchType
+
+CustomFill: TypeAlias = Dict[
+    str,
+    Callable[[Locator, UIInputIdElement, Any, Optional[Page]], Awaitable[None]],
+]
 
 
 def _build_selector(element: UIIdElement, text: Optional[str] = None) -> str:
@@ -109,7 +127,7 @@ async def trigger_next_page(
 
     next_selector = _build_selector(next_action.trigger)
     await page.locator(next_selector).first.click()
-    await page.wait_for_load_state("networkidle")
+    await page.wait_for_load_state("domcontentloaded")
     current_page_number = await get_current_page_index(page, paginate)
 
     paginate_state.current_page = current_page_number
@@ -128,7 +146,7 @@ async def trigger_previous_page(
 
     previous_selector = _build_selector(previous_action.trigger)
     await page.locator(previous_selector).first.click()
-    await page.wait_for_load_state("networkidle")
+    await page.wait_for_load_state("domcontentloaded")
     current_page_number = await get_current_page_index(page, paginate)
 
     paginate_state.current_page = current_page_number
@@ -260,10 +278,32 @@ async def get_items_from_listing(
 
 async def wait_element_show(
     page: Page,
-    element: UIIdElement,
+    element: UIIdElement | str,
 ):
-    await page.wait_for_selector(
-        _build_selector(element), state="visible", timeout=10000
+    selector = _build_selector(element) if isinstance(element, UIIdElement) else element
+    await page.wait_for_selector(selector, state="visible", timeout=10000)
+
+
+async def wait_element_table_show(
+    page: Page,
+    element: UIIdElement | str,
+    element_empty: UIIdElement | str,
+    timeout=10000,
+):
+    selector = _build_selector(element) if isinstance(element, UIIdElement) else element
+    selector_empty = (
+        _build_selector(element_empty)
+        if isinstance(element_empty, UIIdElement)
+        else element_empty
+    )
+
+    await page.wait_for_function(
+        f"""() => {{
+            const rows = document.querySelectorAll('{selector}  tbody tr');
+            const empty = document.querySelector('{selector_empty}');
+            return rows.length > 0 || empty !== null;
+        }}""",
+        timeout=timeout,
     )
 
 
@@ -286,7 +326,7 @@ async def trigger_global_action(
 
     await action_element.click()
 
-    await page.wait_for_load_state("networkidle")
+    await page.wait_for_load_state("domcontentloaded")
 
 
 async def trigger_form_action(page: Page, ui_form: UIForm, id: str):
@@ -310,7 +350,7 @@ async def trigger_form_action(page: Page, ui_form: UIForm, id: str):
 
     await action_element.click()
 
-    await page.wait_for_load_state("networkidle")
+    await page.wait_for_load_state("domcontentloaded")
 
 
 async def trigger_listing_action(
@@ -319,6 +359,7 @@ async def trigger_listing_action(
     paginate: UIPaginate,
     id: str,
     match: Dict[str, str],
+    match_type: Optional[MatchType] = None,
 ):
     cols_actions_map = {
         col.action.id_: (i_col, col.action)
@@ -335,7 +376,7 @@ async def trigger_listing_action(
     async for _, _, row in iter_rows_table_with_paginate(page, ui_listing, paginate):
         row_data = await get_data_from_row_table(row, ui_listing.columns)
 
-        if match.items() <= row_data.items():
+        if is_match_dict(row_data, match, match_type):
             row_cols = await row.locator("td").all()
             row_col = row_cols[col_index]
 
@@ -348,7 +389,7 @@ async def trigger_listing_action(
 
             await action_element.click()
 
-            await page.wait_for_load_state("networkidle")
+            await page.wait_for_load_state("domcontentloaded")
 
             matched = True
             break
@@ -373,7 +414,8 @@ async def get_options_from_select(
 async def fill_ui_form(
     page: Page,
     ui_form: UIForm,
-    data: Dict[str, Union[str, float, int, bool, Path, List[Path]]],
+    data: Dict[str, Union[str, float, int, bool, Path, List[Path], Any]],
+    custom_fill: Optional[CustomFill] = None,
 ) -> bool:
 
     form_selector = _build_selector(ui_form.element)
@@ -396,7 +438,6 @@ async def fill_ui_form(
             "text",
             "password",
             "hidden",
-            "text_area_modal",
             "textarea",
         ]:
             if not isinstance(field_value, str):
@@ -427,7 +468,7 @@ async def fill_ui_form(
             else:
                 await text_element.fill(field_value)
 
-        if field_m.type == "number":
+        elif field_m.type == "number":
             if not isinstance(field_value, (int, float)):
                 raise ValueError(f"O campo {field_id} possui valor inválido.")
             number_element = form_element.locator(f"input[name='{field_m.name}']").first
@@ -492,14 +533,23 @@ async def fill_ui_form(
             else:
                 await check_element.uncheck()
 
+        elif custom_fill and field_m.type in custom_fill:
+            await custom_fill[field_m.type](form_element, field_m, field_value, page)
+
+        else:
+            raise ValueError(
+                f"O preenchimento para {field_m.type} não foi implementado."
+            )
+
 
 async def submit_form_on_page(
     page: Page,
     ui_form: UIForm,
     data: Dict[str, Any],
     id: str,
+    custom_fill: Optional[CustomFill] = None,
 ):
-    await fill_ui_form(page, ui_form, data)
+    await fill_ui_form(page, ui_form, data, custom_fill)
 
     await trigger_form_action(page, ui_form, id)
 
@@ -512,3 +562,17 @@ def get_ui_entity(path: Union[str | Path]) -> UIEntity:
 def get_ui_entity_with_listing(path: Union[str | Path]) -> UIEntityWithListing:
     ui_mapping = read_json(path)
     return UIEntityWithListing.model_validate(ui_mapping)
+
+
+async def redirect_to_url_and_wait_element_show(
+    page: Page,
+    url: str,
+    element: UIIdElement,
+):
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    except Exception:
+        await asyncio.sleep(3)
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    await page.wait_for_load_state("networkidle", timeout=30000)
+    await wait_element_show(page, element)

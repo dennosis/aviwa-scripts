@@ -11,6 +11,8 @@ async def start_page() -> Page:
     browser = await pw.chromium.launch(headless=True)
     # Criamos o contexto e a página
     context = await browser.new_context()
+    await context.clear_cookies()
+    await context.clear_permissions()
     page = await context.new_page()
 
     return page
@@ -38,5 +40,5 @@ async def check_exist_element(element: Locator, name: str) -> bool:
 
 
 async def redirect_to_url(page: Page, url: str):
-    await page.goto(url)
-    await page.wait_for_load_state("networkidle")
+    await page.goto(url, wait_until="domcontentloaded", timeout=120000)
+    await page.wait_for_load_state("networkidle", timeout=120000)

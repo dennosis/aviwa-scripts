@@ -49,7 +49,7 @@ class UIPaginate(BaseModel):
 
 class UIEntityWithListing(BaseModel):
     url: str
-    element: Optional[UIIdElement] = None
+    element: UIIdElement
     listing: UITable
     pagination: UIPaginate
     form: UIForm
@@ -58,7 +58,7 @@ class UIEntityWithListing(BaseModel):
 
 class UIEntity(BaseModel):
     url: str
-    element: Optional[UIIdElement] = None
+    element: UIIdElement
     form: UIForm
     actions: List[Action] = []
 
